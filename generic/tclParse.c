@@ -17,6 +17,14 @@
 #include "tclParse.h"
 #include <assert.h>
 
+void MyPrint(char* start, int size, char* msgprefix) {
+	char* buffer = malloc(size + 1);
+	strncpy(buffer, start, size);
+	buffer[size] = 0;
+	printf("%s%s\n", msgprefix, buffer);
+	free(buffer);
+}
+
 /*
  * The following table provides parsing information about each possible 8-bit
  * character. The table is designed to be referenced with unsigned characters.
@@ -264,7 +272,7 @@ Tcl_ParseCommand(
     type = CHAR_TYPE(*src);
     scanned = 1;	/* Can't have missing whitepsace before first word. */
     while (1) {
-	int expandWord = 0;
+	int prefix = TCL_PREFIX_NONE;
 
 	/* Are we at command termination? */
 
@@ -313,8 +321,8 @@ Tcl_ParseCommand(
 
 	/*
 	 * At this point the word can have one of four forms: something
-	 * enclosed in quotes, something enclosed in braces, and expanding
-	 * word, or an unquoted word (anything else).
+	 * enclosed in quotes, something enclosed in braces, an expanding
+	 * word, an expression, or an unquoted word (anything else).
 	 */
 
     parseWord:
@@ -337,27 +345,35 @@ Tcl_ParseCommand(
 	    numBytes = parsePtr->end - src;
 
 	    /*
-	     * Check whether the braces contained the word expansion prefix
-	     * {*}
+	     * Check whether the braces contained a registered prefix
 	     */
 
 	    expPtr = &parsePtr->tokenPtr[expIdx];
-	    if ((0 == expandWord)
-		    /* Haven't seen prefix already */
-		    && (expIdx + 1 == parsePtr->numTokens)
-		    /* Only one token */
-		    && (((1 == expPtr->size)
-			    /* Same length as prefix */
-			    && (expPtr->start[0] == '*')))
-			    /* Is the prefix */
-		    && (numBytes > 0) && (0 == ParseWhiteSpace(termPtr,
-			    numBytes, &parsePtr->incomplete, &type))
-		    && (type != TYPE_COMMAND_END)
-		    /* Non-whitespace follows */) {
-		expandWord = 1;
-		parsePtr->numTokens--;
-		goto parseWord;
-	    }
+		if ((prefix == TCL_PREFIX_NONE)
+			/* Haven't seen a prefix already */
+			&& (expIdx + 1 == parsePtr->numTokens)
+			/* Only one token */
+			&& (1 == expPtr->size)
+			/* Same length as prefix */
+			&& (numBytes > 0) && (0 == ParseWhiteSpace(termPtr,
+				numBytes, &parsePtr->incomplete, &type))
+			&& (type != TYPE_COMMAND_END)
+			/* Non-whitespace follows */) {
+			switch (expPtr->start[0]) {
+			case '*':
+				prefix = TCL_PREFIX_EXPAND_WORD;
+				break;
+			case '=':
+				prefix = TCL_PREFIX_EXPAND_EXPR;
+				break;
+			default:
+				prefix = TCL_PREFIX_NONE;
+			}
+			if (prefix != TCL_PREFIX_NONE) {
+				parsePtr->numTokens--;
+				goto parseWord;
+			}
+		}
 	} else {
 	    /*
 	     * This is an unquoted word. Call ParseTokens and let it do all of
@@ -380,152 +396,173 @@ Tcl_ParseCommand(
 	tokenPtr = &parsePtr->tokenPtr[wordIndex];
 	tokenPtr->size = src - tokenPtr->start;
 	tokenPtr->numComponents = parsePtr->numTokens - (wordIndex + 1);
-	if (expandWord) {
-	    Tcl_Size i;
-	    int isLiteral = 1;
-
-	    /*
-	     * When a command includes a word that is an expanded literal; for
-	     * example, {*}{1 2 3}, the parser performs that expansion
-	     * immediately, generating several TCL_TOKEN_SIMPLE_WORDs instead
-	     * of a single TCL_TOKEN_EXPAND_WORD that the Tcl_ParseCommand()
-	     * caller might have to expand. This notably makes it simpler for
-	     * those callers that wish to track line endings, such as those
-	     * that implement key parts of TIP 280.
-	     *
-	     * First check whether the thing to be expanded is a literal,
-	     * in the sense of being composed entirely of TCL_TOKEN_TEXT
-	     * tokens.
-	     */
-
-	    for (i = 1; i <= tokenPtr->numComponents; i++) {
-		if (tokenPtr[i].type != TCL_TOKEN_TEXT) {
-		    isLiteral = 0;
-		    break;
-		}
-	    }
-
-	    if (isLiteral) {
-		Tcl_Size elemCount = 0;
-		int code = TCL_OK, literal = 1;
-		const char *nextElem, *listEnd, *elemStart;
-
-		/*
-		 * The word to be expanded is a literal, so determine the
-		 * boundaries of the literal string to be treated as a list
-		 * and expanded. That literal string starts at
-		 * tokenPtr[1].start, and includes all bytes up to, but not
-		 * including (tokenPtr[tokenPtr->numComponents].start +
-		 * tokenPtr[tokenPtr->numComponents].size)
-		 */
-
-		listEnd = (tokenPtr[tokenPtr->numComponents].start +
-			tokenPtr[tokenPtr->numComponents].size);
-		nextElem = tokenPtr[1].start;
-
-		/*
-		 * Step through the literal string, parsing and counting list
-		 * elements.
-		 */
-
-		while (nextElem < listEnd) {
-		    Tcl_Size size;
-
-		    code = TclFindElement(NULL, nextElem, listEnd - nextElem,
-			    &elemStart, &nextElem, &size, &literal);
-		    if ((code != TCL_OK) || !literal) {
-			break;
-		    }
-		    if (elemStart < listEnd) {
-			elemCount++;
-		    }
-		}
-
-		if ((code != TCL_OK) || !literal) {
-		    /*
-		     * Some list element could not be parsed, or is not
-		     * present as a literal substring of the script.  The
-		     * compiler cannot handle list elements that get generated
-		     * by a call to TclCopyAndCollapse(). Defer  the
-		     * handling of  this to  compile/eval time, where  code is
-		     * already  in place to  report the  "attempt to  expand a
-		     * non-list" error or expand lists that require
-		     * substitution.
-		     */
-
-		    tokenPtr->type = TCL_TOKEN_EXPAND_WORD;
-		} else if (elemCount == 0) {
-		    /*
-		     * We are expanding a literal empty list. This means that
-		     * the expanding word completely disappears, leaving no
-		     * word generated this pass through the loop. Adjust
-		     * accounting appropriately.
-		     */
-
-		    parsePtr->numWords--;
-		    parsePtr->numTokens = wordIndex;
-		} else {
-		    /*
-		     * Recalculate the number of Tcl_Tokens needed to store
-		     * tokens representing the expanded list.
-		     */
-
-		    const char *listStart;
-		    Tcl_Size growthNeeded = wordIndex + 2*elemCount
-			    - parsePtr->numTokens;
-
-		    parsePtr->numWords += elemCount - 1;
-		    if (growthNeeded > 0) {
-			TclGrowParseTokenArray(parsePtr, growthNeeded);
-			tokenPtr = &parsePtr->tokenPtr[wordIndex];
-		    }
-		    parsePtr->numTokens = wordIndex + 2*elemCount;
-
-		    /*
-		     * Generate a TCL_TOKEN_SIMPLE_WORD token sequence for
-		     * each element of the literal list we are expanding in
-		     * place. Take care with the start and size fields of each
-		     * token so they point to the right literal characters in
-		     * the original script to represent the right expanded
-		     * word value.
-		     */
-
-		    listStart = nextElem = tokenPtr[1].start;
-		    while (nextElem < listEnd) {
-			int quoted;
-
+	switch (prefix) {
+	case TCL_PREFIX_NONE:
+		if ((tokenPtr->numComponents == 1)
+			&& (tokenPtr[1].type == TCL_TOKEN_TEXT)) {
 			tokenPtr->type = TCL_TOKEN_SIMPLE_WORD;
-			tokenPtr->numComponents = 1;
-
-			tokenPtr++;
-			tokenPtr->type = TCL_TOKEN_TEXT;
-			tokenPtr->numComponents = 0;
-			TclFindElement(NULL, nextElem, listEnd - nextElem,
-				&(tokenPtr->start), &nextElem,
-				&(tokenPtr->size), NULL);
-
-			quoted = (tokenPtr->start[-1] == '{'
-				|| tokenPtr->start[-1] == '"')
-				&& tokenPtr->start > listStart;
-			tokenPtr[-1].start = tokenPtr->start - quoted;
-			tokenPtr[-1].size = tokenPtr->start + tokenPtr->size
-				- tokenPtr[-1].start + quoted;
-
-			tokenPtr++;
-		    }
 		}
-	    } else {
+		break;
+	case TCL_PREFIX_EXPAND_WORD:
+		Tcl_Size i;
+		int isLiteral = 1;
 		/*
-		 * The word to be expanded is not a literal, so defer
-		 * expansion to compile/eval time by marking with a
-		 * TCL_TOKEN_EXPAND_WORD token.
+		 * When a command includes a word that is an expanded literal; for
+		 * example, {*}{1 2 3}, the parser performs that expansion
+		 * immediately, generating several TCL_TOKEN_SIMPLE_WORDs instead
+		 * of a single TCL_TOKEN_EXPAND_WORD that the Tcl_ParseCommand()
+		 * caller might have to expand. This notably makes it simpler for
+		 * those callers that wish to track line endings, such as those
+		 * that implement key parts of TIP 280.
+		 *
+		 * First check whether the thing to be expanded is a literal,
+		 * in the sense of being composed entirely of TCL_TOKEN_TEXT
+		 * tokens.
 		 */
 
-		tokenPtr->type = TCL_TOKEN_EXPAND_WORD;
-	    }
-	} else if ((tokenPtr->numComponents == 1)
-		&& (tokenPtr[1].type == TCL_TOKEN_TEXT)) {
-	    tokenPtr->type = TCL_TOKEN_SIMPLE_WORD;
+		for (i = 1; i <= tokenPtr->numComponents; i++) {
+			if (tokenPtr[i].type != TCL_TOKEN_TEXT) {
+				isLiteral = 0;
+				break;
+			}
+		}
+
+		if (isLiteral) {
+			Tcl_Size elemCount = 0;
+			int code = TCL_OK, literal = 1;
+			const char* nextElem, * listEnd, * elemStart;
+
+			/*
+			 * The word to be expanded is a literal, so determine the
+			 * boundaries of the literal string to be treated as a list
+			 * and expanded. That literal string starts at
+			 * tokenPtr[1].start, and includes all bytes up to, but not
+			 * including (tokenPtr[tokenPtr->numComponents].start +
+			 * tokenPtr[tokenPtr->numComponents].size)
+			 */
+
+			listEnd = (tokenPtr[tokenPtr->numComponents].start +
+				tokenPtr[tokenPtr->numComponents].size);
+			nextElem = tokenPtr[1].start;
+
+			/*
+			 * Step through the literal string, parsing and counting list
+			 * elements.
+			 */
+
+			while (nextElem < listEnd) {
+				Tcl_Size size;
+
+				code = TclFindElement(NULL, nextElem, listEnd - nextElem,
+					&elemStart, &nextElem, &size, &literal);
+				if ((code != TCL_OK) || !literal) {
+					break;
+				}
+				if (elemStart < listEnd) {
+					elemCount++;
+				}
+			}
+
+			if ((code != TCL_OK) || !literal) {
+				/*
+				 * Some list element could not be parsed, or is not
+				 * present as a literal substring of the script.  The
+				 * compiler cannot handle list elements that get generated
+				 * by a call to TclCopyAndCollapse(). Defer  the
+				 * handling of  this to  compile/eval time, where  code is
+				 * already  in place to  report the  "attempt to  expand a
+				 * non-list" error or expand lists that require
+				 * substitution.
+				 */
+
+				tokenPtr->type = TCL_TOKEN_EXPAND_WORD;
+			}
+			else if (elemCount == 0) {
+				/*
+				 * We are expanding a literal empty list. This means that
+				 * the expanding word completely disappears, leaving no
+				 * word generated this pass through the loop. Adjust
+				 * accounting appropriately.
+				 */
+
+				parsePtr->numWords--;
+				parsePtr->numTokens = wordIndex;
+			}
+			else {
+				/*
+				 * Recalculate the number of Tcl_Tokens needed to store
+				 * tokens representing the expanded list.
+				 */
+
+				const char* listStart;
+				Tcl_Size growthNeeded = wordIndex + 2 * elemCount
+					- parsePtr->numTokens;
+
+				parsePtr->numWords += elemCount - 1;
+				if (growthNeeded > 0) {
+					TclGrowParseTokenArray(parsePtr, growthNeeded);
+					tokenPtr = &parsePtr->tokenPtr[wordIndex];
+				}
+				parsePtr->numTokens = wordIndex + 2 * elemCount;
+
+				/*
+				 * Generate a TCL_TOKEN_SIMPLE_WORD token sequence for
+				 * each element of the literal list we are expanding in
+				 * place. Take care with the start and size fields of each
+				 * token so they point to the right literal characters in
+				 * the original script to represent the right expanded
+				 * word value.
+				 */
+
+				listStart = nextElem = tokenPtr[1].start;
+				while (nextElem < listEnd) {
+					int quoted;
+
+					tokenPtr->type = TCL_TOKEN_SIMPLE_WORD;
+					tokenPtr->numComponents = 1;
+
+					tokenPtr++;
+					tokenPtr->type = TCL_TOKEN_TEXT;
+					tokenPtr->numComponents = 0;
+					TclFindElement(NULL, nextElem, listEnd - nextElem,
+						&(tokenPtr->start), &nextElem,
+						&(tokenPtr->size), NULL);
+
+					quoted = (tokenPtr->start[-1] == '{'
+						|| tokenPtr->start[-1] == '"')
+						&& tokenPtr->start > listStart;
+					tokenPtr[-1].start = tokenPtr->start - quoted;
+					tokenPtr[-1].size = tokenPtr->start + tokenPtr->size
+						- tokenPtr[-1].start + quoted;
+
+					tokenPtr++;
+				}
+			}
+		}
+		else {
+			/*
+			 * The word to be expanded is not a literal, so defer
+			 * expansion to compile/eval time by marking with a
+			 * TCL_TOKEN_EXPAND_WORD token.
+			 */
+
+			tokenPtr->type = TCL_TOKEN_EXPAND_WORD;
+		}
+		break;
+	case TCL_PREFIX_EXPAND_EXPR:
+		/* 
+		 * The word is an expression to be evaluated with ParseExpr.
+		 */
+		//char* mystart = tokenPtr->start + 4;
+		//int mysize = tokenPtr->size - 5;
+		//MyPrint(mystart, mysize, "Expression: ");
+		//if (Tcl_ParseExpr(interp, mystart, mysize, parsePtr) != TCL_OK) {
+		//	goto error;
+		//}
+		tokenPtr->type = TCL_TOKEN_EXPAND_EXPR;
+		break;
+	default:
+		Tcl_Panic("ParseCommand encountered unknown prefix");
 	}
 
 	/* Parse the whitespace between words. */
@@ -536,6 +573,8 @@ Tcl_ParseCommand(
     }
 }
 
+
+
 /*
  *----------------------------------------------------------------------
  *
@@ -2307,7 +2346,10 @@ TclSubstTokens(
 	    tokenPtr += tokenPtr->numComponents;
 	    break;
 	}
-
+	case TCL_TOKEN_EXPAND_EXPR: {
+		printf("\nyoo hoo\n\n");
+		break;
+	}
 	default:
 	    Tcl_Panic("unexpected token type in TclSubstTokens: %d",
 		    tokenPtr->type);

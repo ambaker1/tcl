@@ -1822,6 +1822,7 @@ typedef struct Tcl_Token {
 #define TCL_TOKEN_SUB_EXPR	64
 #define TCL_TOKEN_OPERATOR	128
 #define TCL_TOKEN_EXPAND_WORD	256
+#define TCL_TOKEN_EXPAND_EXPR   512
 
 /*
  * Parsing error types. On any parsing error, one of these values will be
@@ -1838,6 +1839,23 @@ typedef struct Tcl_Token {
 #define TCL_PARSE_MISSING_VAR_BRACE	7
 #define TCL_PARSE_SYNTAX		8
 #define TCL_PARSE_BAD_NUMBER		9
+
+/*
+ * Parsing prefix types. 
+ * TCL_PREFIX_NONE -		No prefix
+ * TCL_PREFIX_EXPAND_WORD -	This marks that the parser has encountered
+ *				the literal character prefix "{*}". The following word 
+ *				is marked to be expanded - that is, broken into
+ *				words after substitution is complete.
+ * TCL_PREFIX_SUB_EXPR - This marks that the parser has encountered
+ *				the literal character prefix "{=}". The following word
+ *				is substituted as an expression, like in the Tcl commands
+ *				"expr", "if", "for" and "while".
+ */
+
+#define TCL_PREFIX_NONE 0
+#define TCL_PREFIX_EXPAND_WORD 1
+#define TCL_PREFIX_EXPAND_EXPR 2
 
 /*
  * A structure of the following type is filled in by Tcl_ParseCommand. It
