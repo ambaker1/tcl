@@ -553,9 +553,7 @@ Tcl_ParseCommand(
 		/* 
 		 * The word is an expression to be evaluated with ParseExpr.
 		 */
-		//char* mystart = tokenPtr->start + 4;
-		//int mysize = tokenPtr->size - 5;
-		//MyPrint(mystart, mysize, "Expression: ");
+		MyPrint(tokenPtr->start, tokenPtr->size, "Expression Prefix Token Text: ");
 		//if (Tcl_ParseExpr(interp, mystart, mysize, parsePtr) != TCL_OK) {
 		//	goto error;
 		//}
