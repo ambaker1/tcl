@@ -1,0 +1,21 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "tclsh",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/win/Debug_VC1942/tclsh91.exe",
+      "args": ["${workspaceFolder}/win/testfeature.tcl"],                 // any CLI args your program needs
+      "stopAtEntry": false,       // true to break on main()
+      "cwd": "${workspaceFolder}",// working directory for your app
+      "environment": [],
+      "externalConsole": false,   // pops up an external terminal if true
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/MinGW/bin/gdb.exe"
+    }
+  ]
+}
