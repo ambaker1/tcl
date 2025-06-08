@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "debugbuild",
+            "type": "shell",
+            "command": "${workspaceFolder}\\win\\mybuild.bat",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}\\win"
+            },
+            "group": "build"
+        }
+    ]
+}

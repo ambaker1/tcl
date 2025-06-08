@@ -551,13 +551,14 @@ Tcl_ParseCommand(
 		break;
 	case TCL_PREFIX_EXPAND_EXPR:
 		/* 
-		 * The word is an expression to be evaluated with ParseExpr.
+		 * The word is a prefixed expression to be evaluated as an expression.
 		 */
-		MyPrint(tokenPtr->start, tokenPtr->size, "Expression Prefix Token Text: ");
-		//if (Tcl_ParseExpr(interp, mystart, mysize, parsePtr) != TCL_OK) {
-		//	goto error;
-		//}
+		MyPrint(tokenPtr->start + 4, tokenPtr->size - 5, "Expression Prefix Token Text: ");
+		// if (Tcl_ParseExpr(interp, tokenPtr->start + 4, tokenPtr->size - 5, parsePtr) != TCL_OK) {
+		// 	goto error;
+		// }
 		tokenPtr->type = TCL_TOKEN_EXPAND_EXPR;
+		printf("%d",tokenPtr->type);
 		break;
 	default:
 		Tcl_Panic("ParseCommand encountered unknown prefix");
@@ -2211,7 +2212,8 @@ TclSubstTokens(
 	const char *append = NULL;
 	Tcl_Size appendByteLength = 0;
 	char utfCharBytes[4] = "";
-
+	MyPrint(tokenPtr->start,tokenPtr->size,"token value: ");
+	printf("token type: %d\n",tokenPtr->type);
 	switch (tokenPtr->type) {
 	case TCL_TOKEN_TEXT:
 	    append = tokenPtr->start;
@@ -2345,7 +2347,8 @@ TclSubstTokens(
 	    break;
 	}
 	case TCL_TOKEN_EXPAND_EXPR: {
-		printf("\nyoo hoo\n\n");
+		printf("hi there");
+		printf("%s","yoo hoo\n");
 		break;
 	}
 	default:

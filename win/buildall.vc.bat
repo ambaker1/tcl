@@ -56,14 +56,13 @@ title Building Tcl, please wait...
 :: just to be explicit and convey understanding to the user.  Setting
 :: the INSTALLDIR envar prior to running this batchfile affects all builds.
 ::
-if "%INSTALLDIR%" == "" set INSTALLDIR=C:\Program Files\Tcl
-
+if "%INSTALLDIR%" == "" set INSTALLDIR=C:\GitHub\tcl\win
 
 :: Build the normal stuff along with the help file.
 ::
 set OPTS=none
 if not %SYMBOLS%.==. set OPTS=symbols
-nmake -nologo -f makefile.vc release htmlhelp OPTS=%OPTS% %1
+nmake -nologo -f makefile.vc release OPTS=%OPTS% %1
 if errorlevel 1 goto error
 
 :: Build the static core and shell.
@@ -79,6 +78,7 @@ goto end
 
 :error
 echo *** BOOM! ***
+pause
 goto end
 
 :no_vcvars
@@ -101,6 +101,5 @@ echo DONE!
 goto out
 
 :out
-pause
 title Command Prompt
 
