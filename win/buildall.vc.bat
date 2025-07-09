@@ -40,7 +40,7 @@ if defined WINDOWSSDKDIR (goto :startBuilding)
 ::
 REM call "C:\Program Files\Microsoft Developer Studio\vc98\bin\vcvars32.bat"
 set "VSCMD_START_DIR=%CD%"
-call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat"
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
 if errorlevel 1 (goto no_vcvars)
 
 :startBuilding
@@ -56,14 +56,13 @@ title Building Tcl, please wait...
 :: just to be explicit and convey understanding to the user.  Setting
 :: the INSTALLDIR envar prior to running this batchfile affects all builds.
 ::
-if "%INSTALLDIR%" == "" set INSTALLDIR=C:\Program Files\Tcl
-
+if "%INSTALLDIR%" == "" set INSTALLDIR=C:\GitHub\tcl\win
 
 :: Build the normal stuff along with the help file.
 ::
 set OPTS=none
 if not %SYMBOLS%.==. set OPTS=symbols
-nmake -nologo -f makefile.vc release htmlhelp OPTS=%OPTS% %1
+nmake -nologo -f makefile.vc release OPTS=%OPTS% %1
 if errorlevel 1 goto error
 
 :: Build the static core and shell.
