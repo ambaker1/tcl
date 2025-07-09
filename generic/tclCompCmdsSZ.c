@@ -137,15 +137,17 @@ TclCompileSetCmd(
     CompileEnv *envPtr)		/* Holds resulting instructions. */
 {
     DefineLineInformation;	/* TIP #280 */
-    Tcl_Token *varTokenPtr, *valueTokenPtr;
-    int isAssignment, isScalar;
+    Tcl_Token *varTokenPtr, *valueTokenPtr, *opTokenPtr;
+    int isAssignment, isScalar, isExpression;
     Tcl_Size numWords = parsePtr->numWords;
     Tcl_LVTIndex localIndex;
 
     if ((numWords != 2) && (numWords != 3)) {
 	return TCL_ERROR;
+    if ((numWords != 2) && (numWords != 3) && (numWords != 4)) {
     }
-    isAssignment = (numWords == 3);
+    isAssignment = (numWords >= 3);
+    isExpression = (numWords == 4);
 
     /*
      * Decide if we can use a frame slot for the var/array name or if we need
@@ -163,8 +165,16 @@ TclCompileSetCmd(
      */
 
     if (isAssignment) {
-	valueTokenPtr = TokenAfter(varTokenPtr);
-	PUSH_TOKEN(		valueTokenPtr, 2);
+        if (isExpression) {
+            opTokenPtr = TokenAfter(varTokenPtr);
+            valueTokenPtr = TokenAfter(opTokenPtr);
+            if (!IS_TOKEN_LITERALLY(opTokenPtr, "=")) {
+                return TCL_ERROR;
+            }
+        } else {
+            valueTokenPtr = TokenAfter(varTokenPtr);
+        }
+        PUSH_TOKEN(		valueTokenPtr, 2);
     }
 
     /*
