@@ -142,9 +142,8 @@ TclCompileSetCmd(
     Tcl_Size numWords = parsePtr->numWords;
     Tcl_LVTIndex localIndex;
 
-    if ((numWords != 2) && (numWords != 3)) {
-	return TCL_ERROR;
     if ((numWords != 2) && (numWords != 3) && (numWords != 4)) {
+	return TCL_ERROR;
     }
     isAssignment = (numWords >= 3);
     isExpression = (numWords == 4);
