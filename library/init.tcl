@@ -86,6 +86,11 @@ namespace eval tcl {
 	}
 	unset Dir Path
     }
+    
+    # TIP #XXX list function
+    namespace eval mathfunc {
+        proc list {args} {return $args}
+    }
 }
 
 namespace eval tcl::Pkg {}
