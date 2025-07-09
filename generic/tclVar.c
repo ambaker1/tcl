@@ -1532,8 +1532,16 @@ Tcl_SetObjCmd(
 	}
 	Tcl_SetObjResult(interp, varValueObj);
 	return TCL_OK;
-    } else {
-	Tcl_WrongNumArgs(interp, 1, objv, "varName ?newValue?");
+    } else if (objc == 4) {
+	varValueObj = Tcl_ObjSetVar2(interp, objv[1], NULL, objv[3],
+		TCL_LEAVE_ERR_MSG);
+	if (varValueObj == NULL) {
+	    return TCL_ERROR;
+	}
+	Tcl_SetObjResult(interp, varValueObj);
+	return TCL_OK;
+	} else {
+	Tcl_WrongNumArgs(interp, 1, objv, "varName ?newValue | = expr?");
 	return TCL_ERROR;
     }
 }
